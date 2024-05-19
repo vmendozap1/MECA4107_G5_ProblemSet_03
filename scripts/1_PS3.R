@@ -27,6 +27,7 @@ setwd("C:/Users/USER/OneDrive - Universidad de los andes/Semestre VIII/Big Data/
 mzbarrio <- st_read("Data/manzanaestratificacion/ManzanaEstratificacion.shp")
 test<-read.csv("Data/test.csv")
 train<-read.csv("Data/train.csv")
+("Data/submission_template.csv")
 
 
       ################Visualizaciones################
@@ -57,18 +58,19 @@ leaflet() %>%
   
 
 #Unificamos lat y lon en una variable
-coordinates <- st_as_sf(train, coords = c("lon", "lat"), crs = st_crs(mzbarrio))
+coordinates_tr <- st_as_sf(train, coords = c("lon", "lat"), crs = st_crs(mzbarrio))
+coordinates_te <- st_as_sf(test, coords = c("lon", "lat"), crs = st_crs(mzbarrio))
 
 #Unificar Estrato por cercanía del inmueble al polígono
 mzbarrio <- st_make_valid(mzbarrio)
 sf_use_s2(FALSE)
-train <- st_join(coordinates, mzbarrio, join=st_nearest_feature)
-
+train <- st_join(coordinates_tr, mzbarrio, join=st_nearest_feature)
+test <- st_join(coordinates_te, mzbarrio, join=st_nearest_feature)
 
 ##########################################################
 ################ Limpieza de texto #######################
-
-#Normalización
+##Normalización
+#Train
 # Todo en minuscula
 train <- train %>%
   mutate(description = str_to_lower(description))
@@ -82,10 +84,23 @@ train <- train %>%
 train <- train %>%
   mutate(description = str_trim(gsub("\\s+", " ", description)))
 
+#Test
+test <- test %>%
+  mutate(description = str_to_lower(description))
+# Eliminamos tildes
+test <- test %>%
+  mutate(description = iconv(description, from = "UTF-8", to = "ASCII//TRANSLIT"))
+# Eliminamos caracteres especiales
+test <- test %>%
+  mutate(description = str_replace_all(description, "[^[:alnum:]]", " "))
+# Eliminamos espacios extras
+test <- test %>%
+  mutate(description = str_trim(gsub("\\s+", " ", description)))
 
 ############################################################
 ################ Extracción del Área #######################
 #Extraemos Superficie total de los inmuebles 
+#Train
 train <- train %>%
   mutate(area= str_extract(description, "(\\d+) mts|(\\d+) mt2|(\\d+) metros|(\\d+) m2|(\\d+) m^2"))
 
@@ -102,14 +117,37 @@ train<- train %>% mutate(area=  ifelse(test=( area>= up),
   mutate(area=  ifelse(test=(area<= low), 
                                          yes= NA,
                                          no= area ))
+#Test
+test <- test %>%
+  mutate(area= str_extract(description, "(\\d+) mts|(\\d+) mt2|(\\d+) metros|(\\d+) m2|(\\d+) m^2"))
+
+#Extraemos la variable numérica y seleccionamos el area por percentiles
+test <- test %>%
+  mutate(area = as.integer(str_extract(area, "\\d+")))  %>%
+  mutate(area = ifelse(is.na(area)==F,area, pmin(surface_total, surface_covered, na.rm = TRUE)))
+
+low <- quantile(test$area, 0.05,na.rm=T)
+up <- quantile(test$area, 0.90,na.rm=T)
+test<- test %>% mutate(area=  ifelse(test=( area>= up), 
+                                       yes= NA,
+                                       no= area ))%>% 
+  mutate(area=  ifelse(test=(area<= low), 
+                       yes= NA,
+                       no= area ))
+
 
 ############################################################
-################ Precio por mts^2 #######################
-
+################ Precio por mts^2 #########################
+#Train
 train <- train %>%
   mutate(precio_mt2 = round(price / area, 0))
 low <- quantile(train$precio_mt2, 0.05,na.rm=T)
 up <- quantile(train$precio_mt2, 0.97,na.rm=T)
+#Test
+test <- test %>%
+  mutate(precio_mt2 = round(price / area, 0))
+low <- quantile(test$precio_mt2, 0.05,na.rm=T)
+up <- quantile(test$precio_mt2, 0.97,na.rm=T)
 
 #Visualización del precio por m^2 
 wdb <- st_drop_geometry(train)
@@ -117,23 +155,24 @@ ggplot(wdb, aes(x = precio_mt2)) +
   geom_histogram()+
   theme_classic()
 
-# Estadísticas descriptivas
+
+############################################################
+# Selección de Variables de interés y Est. descriptivas
+
+train<- train %>%
+  select(`price`,`month`,`year`,`rooms`,`bedrooms`,bathrooms, ESTRATO,area,precio_mt2,description )
+
+test<- test %>%
+  select(`price`,`month`,`year`,`rooms`,`bedrooms`,bathrooms, ESTRATO,area,precio_mt2,description )
+
 skim <- skim(train)
 skim <- data.frame(skim)
 skim <- skim %>%
   kbl() %>%
   kable_classic_2(full_width = F)
 
-#Visulaización de Missings
-vis_dat(as.data.frame(train$rooms))
-summary(train$surface_total)
-summary(train$surface_covered)
-
-summary(train$)
-
-vis_dat(as.data.frame(mzbarrio))
-
-#summary(train)
+# Visulaización de Missings
+vis_dat(as.data.frame(train))
 
 #matriz de corrrelación
 wdb<- wdb %>%
@@ -145,62 +184,9 @@ matriz_correlacion <- matriz_correlacion %>%
   kable_classic_2(full_width = F)
 
 
+#Exportar Base 
+write.csv(train,"trainfiltrado", row.names = FALSE)
+write.csv(test,"testfiltrado", row.names = FALSE)
 
-
-
-#Graficar en un mapa Por coordenadas
-leaflet() %>%
-  addTiles() %>%
-  addCircles(lng = train$lon, 
-             lat = train$lat)
-
-###Mapa Interactivo###
-#reescalar VAriables
-train$precio_por_mt2_sc =1
-
-#train <- train %>%
-#  mutate(precio_por_mt2_sc =( (precio_mt2 - min(precio_mt2)) / (max(precio_mt2) - min(precio_mt2))))
-
-# creamos una variable de color que depende del tipo de inmueble.
-
-train <- train %>%
-  mutate(color = case_when(property_type == "Apartamento" ~ "#2A9D8F",
-                           property_type == "Casa" ~ "#F4A261"))
-
-# Vamos a crear un mensaje en popup con html
-html <- paste0("<b>Precio:</b> ",
-               scales::dollar(train$price),
-               "<br> <b>Area:</b> ",
-               as.integer(train$surface_total), " mt2",
-               "<br> <b>Tipo de immueble:</b> ",
-               train$property_type,
-               "<br> <b>Numero de alcobas:</b> ",
-               as.integer(train$rooms),
-               "<br> <b>Numero de baños:</b> ",
-               as.integer(train$bathrooms),
-               "<br> <b>Sector:</b> ",
-               train$l4,
-               "<br> <b>Barrio:</b> ",
-               train$l5)
-
-# Eliminamos los immuebles con área menor a 20
-#db <- db %>% filter( surface_covered > 20)
-
-
-# Encontramos el queremos que sea el centro del mapa 
-latitud_central <- mean(train$lat)
-longitud_central <- mean(train$lon)
-
-# Creamos el plot
-leaflet() %>%
-  addTiles() %>%
-  setView(lng = longitud_central, lat = latitud_central, zoom = 12) %>%
-  addCircles(lng = train$lon, 
-             lat = train$lat, 
-             col = train$color,
-             fillOpacity = 1,
-             opacity = 1,
-             radius = train$precio_por_mt2_sc*10,
-             popup = html)
 
 
