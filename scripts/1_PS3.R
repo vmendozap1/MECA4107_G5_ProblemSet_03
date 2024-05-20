@@ -27,7 +27,6 @@ setwd("C:/Users/USER/OneDrive - Universidad de los andes/Semestre VIII/Big Data/
 mzbarrio <- st_read("Data/manzanaestratificacion/ManzanaEstratificacion.shp")
 test<-read.csv("Data/test.csv")
 train<-read.csv("Data/train.csv")
-("Data/submission_template.csv")
 
 
       ################Visualizaciones################
@@ -58,14 +57,20 @@ leaflet() %>%
   
 
 #Unificamos lat y lon en una variable
+train$longitud <- train$lon
+train$latitud <- train$lat
+test$longitud <- test$lon
+test$latitud <- test$lat
+
 coordinates_tr <- st_as_sf(train, coords = c("lon", "lat"), crs = st_crs(mzbarrio))
 coordinates_te <- st_as_sf(test, coords = c("lon", "lat"), crs = st_crs(mzbarrio))
 
 #Unificar Estrato por cercanía del inmueble al polígono
 mzbarrio <- st_make_valid(mzbarrio)
 sf_use_s2(FALSE)
-train <- st_join(coordinates_tr, mzbarrio, join=st_nearest_feature)
+train<- st_join(coordinates_tr, mzbarrio, join=st_nearest_feature)
 test <- st_join(coordinates_te, mzbarrio, join=st_nearest_feature)
+
 
 ##########################################################
 ################ Limpieza de texto #######################
@@ -143,6 +148,7 @@ train <- train %>%
   mutate(precio_mt2 = round(price / area, 0))
 low <- quantile(train$precio_mt2, 0.05,na.rm=T)
 up <- quantile(train$precio_mt2, 0.97,na.rm=T)
+
 #Test
 test <- test %>%
   mutate(precio_mt2 = round(price / area, 0))
@@ -160,10 +166,10 @@ ggplot(wdb, aes(x = precio_mt2)) +
 # Selección de Variables de interés y Est. descriptivas
 
 train<- train %>%
-  select(`price`,`month`,`year`,`rooms`,`bedrooms`,bathrooms, ESTRATO,area,precio_mt2,description )
+  select(property_id,`price`,`month`,`year`,`rooms`,`bedrooms`,bathrooms, ESTRATO,area,precio_mt2,description,latitud,longitud )
 
 test<- test %>%
-  select(`price`,`month`,`year`,`rooms`,`bedrooms`,bathrooms, ESTRATO,area,precio_mt2,description )
+  select(property_id,`price`,`month`,`year`,`rooms`,`bedrooms`,bathrooms, ESTRATO,area,precio_mt2,description,latitud,longitud )
 
 skim <- skim(train)
 skim <- data.frame(skim)
@@ -185,8 +191,11 @@ matriz_correlacion <- matriz_correlacion %>%
 
 
 #Exportar Base 
-write.csv(train,"trainfiltrado", row.names = FALSE)
-write.csv(test,"testfiltrado", row.names = FALSE)
+
+train<- as.data.frame(st_drop_geometry(train))
+test<- as.data.frame(st_drop_geometry(test))
+write.csv(train,"Data/trainfiltrado.csv", row.names = FALSE)
+write.csv(test,"Data/testfiltrado.csv", row.names = FALSE)
 
 
 
