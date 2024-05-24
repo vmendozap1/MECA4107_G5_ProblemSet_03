@@ -29,6 +29,7 @@ setwd("C:/Users/USER/OneDrive - Universidad de los andes/Semestre VIII/Big Data/
 
 #Cargamos las bases de Datos
 mzbarrio <- st_read("Data/manzanaestratificacion/ManzanaEstratificacion.shp")
+barrio <- st_read("Data/manzanaestratificacion/barrios-bogota.geojson")
 test<-read.csv("Data/test.csv")
 train<-read.csv("Data/train.csv")
 
@@ -40,6 +41,7 @@ test$longitud <- test$lon
 test$latitud <- test$lat
 
 mzbarrio <- st_transform(mzbarrio, crs = 4326)
+barrio <- st_transform(barrio, crs = 4326)
 coordinates_tr <- st_as_sf(train, coords = c("lon", "lat"), crs = st_crs(mzbarrio))
 coordinates_te <- st_as_sf(test, coords = c("lon", "lat"), crs = st_crs(mzbarrio))
 
@@ -50,6 +52,11 @@ coordinates_te <- st_as_sf(test, coords = c("lon", "lat"), crs = st_crs(mzbarrio
 leaflet() %>% 
   addTiles() %>%  #capa base
   addPolygons(data = mzbarrio$geometry, fillColor = "red",color="black", weight = 1)
+
+#Visualizamos los barrios de BTAo
+leaflet() %>% 
+  addTiles() %>%  #capa base
+  addPolygons(data = barrio$geometry, fillColor = "red",color="black", weight = 1)
 
 #Visualizamos los apartamentos por ubicación
 leaflet() %>% 
@@ -79,6 +86,15 @@ mzbarrio <- st_make_valid(mzbarrio)
 sf_use_s2(FALSE)
 train<- st_join(coordinates_tr, mzbarrio, join=st_nearest_feature)
 test <- st_join(coordinates_te, mzbarrio, join=st_nearest_feature)
+
+##########################################################
+### Agregamos la variable Barrio ########################
+#Unificar Bariro por cercanía del inmueble al polígono
+names(barrio)[names(barrio) == "nombre"] <- "barrio"
+barrio <- st_make_valid(barrio)
+sf_use_s2(FALSE)
+train<- st_join(train, barrio, join=st_nearest_feature)
+test <- st_join(test, barrio, join=st_nearest_feature)
 
 
 ##########################################################
@@ -228,9 +244,9 @@ impute_banio_2 <- function(df) {
 }
 
 train <- impute_banio(train)
-#test <- impute_banio(test)
+test <- impute_banio(test)
 train <- impute_banio_2(train)
-#test <- impute_banio_2(test)
+test <- impute_banio_2(test)
 
 summary(test)
 
@@ -264,9 +280,9 @@ impute_rooms_2 <- function(df) {
 }
 
 train <- impute_rooms(train)
-#test <- impute_rooms(test)
+test <- impute_rooms(test)
 train <- impute_rooms_2(train)
-#test <- impute_rooms_2(test)
+test <- impute_rooms_2(test)
 
 #Alcobas
 train<- train %>% mutate(bedrooms=  ifelse(test=( bedrooms>= 6), 
@@ -298,9 +314,9 @@ impute_bedrooms_2 <- function(df) {
 }
 
 train <- impute_bedrooms(train)
-#test <- impute_bedrooms(test)
+test <- impute_bedrooms(test)
 train <- impute_bedrooms_2(train)
-#test <- impute_bedrooms_2(test)
+test <- impute_bedrooms_2(test)
 
 
 
@@ -453,10 +469,10 @@ ggplotly(plot_are)
 # Selección de Variables de interés y Est. descriptivas
 
 train<- train %>%
-  select(property_id,`price`,`month`,`year`,`rooms`,`bedrooms`,bathrooms, ESTRATO,area,description,latitud,longitud,distancia_sm,distancia_cc )
+  select(property_id,`price`,`month`,`year`,`rooms`,`bedrooms`,bathrooms, ESTRATO,area,description,latitud,longitud,distancia_sm,distancia_cc,barrio,codigo_upz,codigo_localidad )
 
 test<- test %>%
-  select(property_id,`price`,`month`,`year`,`rooms`,`bedrooms`,bathrooms, ESTRATO,area,description,latitud,longitud,distancia_sm,distancia_cc )
+  select(property_id,`price`,`month`,`year`,`rooms`,`bedrooms`,bathrooms, ESTRATO,area,description,latitud,longitud,distancia_sm,distancia_cc,barrio,codigo_upz,codigo_localidad )
 
 skim <- skim(train)
 skim <- data.frame(skim)

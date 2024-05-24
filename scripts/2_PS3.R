@@ -33,7 +33,9 @@ trainf$bathrooms<- as.factor(trainf$bathrooms)
 trainf$rooms<- as.factor(trainf$rooms)
 trainf$year<- as.factor(trainf$year)
 trainf$month<- as.factor(trainf$month)
-
+trainf$barrio<- as.factor(trainf$barrio)
+trainf$codigo_upz<- as.factor(trainf$codigo_upz)
+trainf$codigo_localidad<- as.factor(trainf$codigo_localidad)
 
 testf$bedrooms <- as.factor(testf$bedrooms)
 testf$ESTRATO<- as.factor(testf$ESTRATO)
@@ -41,6 +43,9 @@ testf$bathrooms<- as.factor(testf$bathrooms)
 testf$rooms<- as.factor(testf$rooms)
 testf$year<- as.factor(testf$year)
 testf$month<- as.factor(testf$month)
+testf$barrio<- as.factor(testf$barrio)
+testf$codigo_upz<- as.factor(testf$codigo_upz)
+testf$codigo_localidad<- as.factor(testf$codigo_localidad)
 
 
 #Random Forest Intento
