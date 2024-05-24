@@ -26,14 +26,31 @@ template <- read.csv("Data/submission_template.csv")
 summary(trainf)
 summary(testf)
 
+#Convertir a Var categóricas
+trainf$bedrooms <- as.factor(trainf$bedrooms)
+trainf$ESTRATO<- as.factor(trainf$ESTRATO)
+trainf$bathrooms<- as.factor(trainf$bathrooms)
+trainf$rooms<- as.factor(trainf$rooms)
+trainf$year<- as.factor(trainf$year)
+trainf$month<- as.factor(trainf$month)
+
+
+testf$bedrooms <- as.factor(testf$bedrooms)
+testf$ESTRATO<- as.factor(testf$ESTRATO)
+testf$bathrooms<- as.factor(testf$bathrooms)
+testf$rooms<- as.factor(testf$rooms)
+testf$year<- as.factor(testf$year)
+testf$month<- as.factor(testf$month)
+
+
 #Random Forest Intento
 
 set.seed(4926)
 ctrl<- trainControl(method = "cv",
                     number = 5)
 
-mtry_grid<-expand.grid(mtry =c(6,9,11), # c(70,80,90!)
-                       min.node.size= c(25,35,45,55,65,75), #c(35,45,55,65,75!) controla la complejidad del arbol
+mtry_grid<-expand.grid(mtry =c(10,17,25), # c(6,9!,11)
+                       min.node.size= c(5,10,20,25), #c(25!,35,45,55,65,75) controla la complejidad del arbol
                        splitrule= 'variance') #splitrule 
 
 cv_RForest <- train(price~month+year+rooms+bedrooms+bathrooms+ESTRATO+area+latitud+longitud+distancia_sm+distancia_cc,
@@ -52,8 +69,8 @@ varImp(cv_RForest)
 
 #Envío para Kagglee
 
-predictSample <- test   %>% 
-  mutate(price = predict(cv_RForest, newdata = test)    ## predicted class labels
+predictSample <- testf   %>% 
+  mutate(price = predict(cv_RForest, newdata = testf)    ## predicted class labels
   )  %>% select(property_id,price)
 
 predictSample<- predictSample %>% 
@@ -61,5 +78,5 @@ predictSample<- predictSample %>%
   select(property_id,price)
 
 
-write.csv(predictSample,"RF_1.csv", row.names = FALSE)
+write.csv(predictSample,"predictions/RF_4.csv", row.names = FALSE)
 

@@ -209,7 +209,7 @@ train<- train %>% mutate(bathrooms=  ifelse(test=( bathrooms>= 5),
 test<- test %>% mutate(bathrooms=  ifelse(test=( bathrooms>= 5), 
                                           yes= 5,
                                           no= bathrooms ))%>% 
-  mutate(bathrooms=  ifelse(test=(bathrooms<= 1), 
+  mutate(bathrooms=  ifelse(test=(bathrooms==0), 
                             yes= 1,
                             no= bathrooms ))
 
@@ -228,9 +228,9 @@ impute_banio_2 <- function(df) {
 }
 
 train <- impute_banio(train)
-test <- impute_banio(test)
+#test <- impute_banio(test)
 train <- impute_banio_2(train)
-test <- impute_banio_2(test)
+#test <- impute_banio_2(test)
 
 summary(test)
 
@@ -245,7 +245,7 @@ train<- train %>% mutate(rooms=  ifelse(test=( rooms>= 6),
 test<- test %>% mutate(rooms=  ifelse(test=( rooms>= 6), 
                                           yes= 6,
                                           no= rooms ))%>% 
-  mutate(rooms=  ifelse(test=(rooms<= 1), 
+  mutate(rooms=  ifelse(test=(rooms==0), 
                             yes= 1,
                             no= rooms ))
 
@@ -264,9 +264,9 @@ impute_rooms_2 <- function(df) {
 }
 
 train <- impute_rooms(train)
-test <- impute_rooms(test)
+#test <- impute_rooms(test)
 train <- impute_rooms_2(train)
-test <- impute_rooms_2(test)
+#test <- impute_rooms_2(test)
 
 #Alcobas
 train<- train %>% mutate(bedrooms=  ifelse(test=( bedrooms>= 6), 
@@ -279,7 +279,7 @@ train<- train %>% mutate(bedrooms=  ifelse(test=( bedrooms>= 6),
 test<- test %>% mutate(bedrooms=  ifelse(test=( bedrooms>= 6), 
                                       yes= 6,
                                       no= bedrooms ))%>% 
-  mutate(bedrooms=  ifelse(test=(bedrooms<= 1), 
+  mutate(bedrooms=  ifelse(test=(bedrooms== 0), 
                         yes= 1,
                         no= bedrooms ))
 
@@ -298,9 +298,9 @@ impute_bedrooms_2 <- function(df) {
 }
 
 train <- impute_bedrooms(train)
-test <- impute_bedrooms(test)
+#test <- impute_bedrooms(test)
 train <- impute_bedrooms_2(train)
-test <- impute_bedrooms_2(test)
+#test <- impute_bedrooms_2(test)
 
 
 
