@@ -21,7 +21,9 @@ p_load( tidyverse, # tidy-data
 )
 
 #Seleccionamos el directorio y Cargamos las bases de datos
-setwd("C:/Users/USER/OneDrive - Universidad de los andes/Semestre VIII/Big Data/MECA4107_G5_ProblemSet_03")
+#setwd("C:/Users/USER/OneDrive - Universidad de los andes/Semestre VIII/Big Data/MECA4107_G5_ProblemSet_03")
+setwd("C:/Users/madag/OneDrive - Universidad de los andes/Semestre VIII/Big Data/MECA4107_G5_ProblemSet_03")
+
 
 #Cargamos las bases de Datos
 mzbarrio <- st_read("Data/manzanaestratificacion/ManzanaEstratificacion.shp")
@@ -29,7 +31,18 @@ test<-read.csv("Data/test.csv")
 train<-read.csv("Data/train.csv")
 
 
-      ################Visualizaciones################
+#Unificamos lat y lon en una variable
+train$longitud <- train$lon
+train$latitud <- train$lat
+test$longitud <- test$lon
+test$latitud <- test$lat
+
+mzbarrio <- st_transform(mzbarrio, crs = 4326)
+coordinates_tr <- st_as_sf(train, coords = c("lon", "lat"), crs = st_crs(mzbarrio))
+coordinates_te <- st_as_sf(test, coords = c("lon", "lat"), crs = st_crs(mzbarrio))
+
+##########################################################
+###########Primeras Visualizaciones #####################
 
 #Visualizamos las manzanas con Estrato Social asignado
 leaflet() %>% 
@@ -39,7 +52,7 @@ leaflet() %>%
 #Visualizamos los apartamentos por ubicación
 leaflet() %>% 
   addTiles() %>%  #capa base
-  addCircles(data=coordinates$geometry, fillColor = "blue",color = "blue",weight = 1)
+  addCircles(data=coordinates_tr$geometry, fillColor = "blue",color = "blue",weight = 1)
 
 #Plot de estratos por manzana e inmuebles
 colores_estrato <- colorNumeric(palette = "RdYlBu", domain = mzbarrio$ESTRATO)
@@ -53,23 +66,133 @@ leaflet() %>%
   addTiles() %>%  # Capa base
   addPolygons(data = mzbarrio, fillColor = "#00BFFF", color = "#00BFFF", weight = 1) %>%
   setView(lng = longitud_central, lat = latitud_central, zoom = 9) %>% 
-  addCircles(data = coordinates$geometry, fillColor = "#104E8B", color = "#104E8B", weight = 1) 
+  addCircles(data = coordinates_tr$geometry, fillColor = "#104E8B", color = "#104E8B", weight = 1) 
   
 
-#Unificamos lat y lon en una variable
-train$longitud <- train$lon
-train$latitud <- train$lat
-test$longitud <- test$lon
-test$latitud <- test$lat
-
-coordinates_tr <- st_as_sf(train, coords = c("lon", "lat"), crs = st_crs(mzbarrio))
-coordinates_te <- st_as_sf(test, coords = c("lon", "lat"), crs = st_crs(mzbarrio))
-
+##########################################################
+### Agregamos la variable estrato ########################
 #Unificar Estrato por cercanía del inmueble al polígono
+
 mzbarrio <- st_make_valid(mzbarrio)
 sf_use_s2(FALSE)
 train<- st_join(coordinates_tr, mzbarrio, join=st_nearest_feature)
 test <- st_join(coordinates_te, mzbarrio, join=st_nearest_feature)
+
+
+##########################################################
+### Agregamos Distamcia al CC más cercano ################
+
+
+# Extraemos la info de todos los CCs
+cc <- opq(bbox = getbb("Bogota Colombia")) %>%
+  add_osm_feature(key = "shop" , value = "mall") 
+
+# Cambiamos el formato para que sea un objeto sf (simple features)
+cc_sf <- osmdata_sf(cc)
+
+# De las features del parque nos interesa su geomoetría y donde estan ubicados 
+cc_geometria <- cc_sf$osm_polygons %>% 
+  dplyr::select(osm_id, name) 
+
+# Guardemos los poligonos de los CC 
+cc_geometria <- st_as_sf(cc_sf$osm_polygons)
+
+# Calculamos el centroide de cada CC para aproximar su ubciacion como un solo punto 
+cc_centroides <- st_centroid(cc_geometria, byid = T)
+cc_centroides <- cc_centroides %>%
+  mutate(x=st_coordinates(cc_centroides)[, "X"]) %>%
+  mutate(y=st_coordinates(cc_centroides)[, "Y"])
+
+#Visualización de los CC
+leaflet() %>%
+  addTiles() %>%
+  addPolygons(data = cc_geometria, col = "red",weight = 10,
+              opacity = 0.8,popup = cc_geometria$name) %>%
+  addCircles(lng = cc_centroides$x, 
+             lat = cc_centroides$y, 
+             col = "darkblue", opacity = 0.5,radius =1)
+#Rectificación de cooredenadas
+cc_centroides_sf <- st_as_sf(cc_centroides, coords = c("x", "y"), crs=4326)
+cc_sf_tr<- st_as_sf(train, coords = c("lon", "lat"),  crs = 4326)
+cc_sf_te<- st_as_sf(test, coords = c("lon", "lat"),  crs = 4326)
+
+# Calculo de la distancia tr
+dist_matrix_tr <- st_distance(x = cc_sf_tr, y = cc_centroides_sf)
+dist_min_tr <- apply(dist_matrix_tr, 1, min)  
+# Calculo de la distancia te
+dist_matrix_te <- st_distance(x = cc_sf_te, y = cc_centroides_sf)
+dist_min_te <- apply(dist_matrix_te, 1, min)  
+
+# Agregamos a Train y Test
+train <- train %>% mutate(distancia_cc = dist_min_tr)
+test <- test %>% mutate(distancia_cc = dist_min_te)
+
+
+
+plot <- ggplot(train, aes(x = distancia_cc)) +
+  geom_histogram(bins = 50, fill = "darkblue", alpha = 0.4) +
+  labs(x = "Distancia mínima a un Centro Comercial en metros", y = "Cantidad",
+       title = "Distribución de la distancia a los Centros Comerciales") +
+  theme_bw()
+
+ggplotly(plot)
+
+
+##########################################################
+### Agregamos Distamcia al Supermercado más cercano ######
+
+# Extraemos la info de todos los SMs
+sm <- opq(bbox = getbb("Bogota Colombia")) %>%
+  add_osm_feature(key = "shop" , value = "supermarket") 
+
+# Cambiamos el formato para que sea un objeto sf (simple features)
+sm_sf <- osmdata_sf(sm)
+
+# De las features del parque nos interesa su geomoetría y donde estan ubicados 
+sm_geometria <- sm_sf$osm_polygons %>% 
+  dplyr::select(osm_id, name) 
+
+# Guardemos los poligonos de los parques 
+sm_geometria <- st_as_sf(sm_sf$osm_polygons)
+
+# Calculamos el centroide de cada parque para aproximar su ubciacion como un solo punto 
+sm_centroides <- st_centroid(sm_geometria, byid = T)
+sm_centroides <- sm_centroides %>%
+  mutate(x=st_coordinates(sm_centroides)[, "X"]) %>%
+  mutate(y=st_coordinates(sm_centroides)[, "Y"])
+
+#Visualización de los sm
+leaflet() %>%
+  addTiles() %>%
+  addPolygons(data = sm_geometria, col = "red",weight = 10,
+              opacity = 0.8,popup = sm_geometria$name) %>%
+  addCircles(lng = sm_centroides$x, 
+             lat = sm_centroides$y, 
+             col = "darkblue", opacity = 0.5,radius =1)
+#Rectificación de cooredenadas
+sm_centroides_sf <- st_as_sf(sm_centroides, coords = c("x", "y"), crs=4326)
+sm_sf_tr<- st_as_sf(train, coords = c("lon", "lat"),  crs = 4326)
+sm_sf_te<- st_as_sf(test, coords = c("lon", "lat"),  crs = 4326)
+
+# Calculo de la distancia tr
+dist_matrix_tr <- st_distance(x = sm_sf_tr, y = sm_centroides_sf)
+dist_min_tr <- apply(dist_matrix_tr, 1, min)  
+# Calculo de la distancia te
+dist_matrix_te <- st_distance(x = sm_sf_te, y = sm_centroides_sf)
+dist_min_te <- apply(dist_matrix_te, 1, min)  
+
+# Agregamos a Train y Test
+train <- train %>% mutate(distancia_sm = dist_min_tr)
+test <- test %>% mutate(distancia_sm = dist_min_te)
+
+
+plot <- ggplot(train, aes(x = distancia_sm)) +
+  geom_histogram(bins = 50, fill = "darkblue", alpha = 0.4) +
+  labs(x = "Distancia mínima a un Centro Comercial en metros", y = "Cantidad",
+       title = "Distribución de la distancia a los Centros Comerciales") +
+  theme_bw()
+ggplotly(plot)
+
 
 
 ##########################################################
