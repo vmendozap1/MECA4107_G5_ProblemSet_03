@@ -17,12 +17,14 @@ p_load( tidyverse, # tidy-data
         tmaptools,
         sf,
         GADMTools,
-        stringr
+        stringr,
+        ggplot2,
+        plotly 
 )
 
 #Seleccionamos el directorio y Cargamos las bases de datos
-#setwd("C:/Users/USER/OneDrive - Universidad de los andes/Semestre VIII/Big Data/MECA4107_G5_ProblemSet_03")
-setwd("C:/Users/madag/OneDrive - Universidad de los andes/Semestre VIII/Big Data/MECA4107_G5_ProblemSet_03")
+setwd("C:/Users/USER/OneDrive - Universidad de los andes/Semestre VIII/Big Data/MECA4107_G5_ProblemSet_03")
+#setwd("C:/Users/madag/OneDrive - Universidad de los andes/Semestre VIII/Big Data/MECA4107_G5_ProblemSet_03")
 
 
 #Cargamos las bases de Datos
@@ -194,6 +196,113 @@ plot <- ggplot(train, aes(x = distancia_sm)) +
 ggplotly(plot)
 
 
+##########################################################
+################ Outliers         #######################
+#Baños
+train<- train %>% mutate(bathrooms=  ifelse(test=( bathrooms>= 5), 
+                                     yes= 5,
+                                     no= bathrooms ))%>% 
+  mutate(bathrooms=  ifelse(test=(bathrooms<= 1), 
+                       yes= 1,
+                       no= bathrooms ))
+
+test<- test %>% mutate(bathrooms=  ifelse(test=( bathrooms>= 5), 
+                                          yes= 5,
+                                          no= bathrooms ))%>% 
+  mutate(bathrooms=  ifelse(test=(bathrooms<= 1), 
+                            yes= 1,
+                            no= bathrooms ))
+
+impute_banio <- function(df) {
+  df %>%
+    group_by(ESTRATO, bedrooms,rooms) %>%
+    mutate(bathrooms = ifelse(is.na(bathrooms), floor(mean(bathrooms, na.rm = TRUE)), bathrooms)) %>%
+    ungroup()
+}
+
+impute_banio_2 <- function(df) {
+  df %>%
+    group_by(ESTRATO) %>%
+    mutate(bathrooms = ifelse(is.na(bathrooms), floor(mean(bathrooms, na.rm = TRUE)), bathrooms)) %>%
+    ungroup()
+}
+
+train <- impute_banio(train)
+test <- impute_banio(test)
+train <- impute_banio_2(train)
+test <- impute_banio_2(test)
+
+summary(test)
+
+#Habitaciones
+train<- train %>% mutate(rooms=  ifelse(test=( rooms>= 6), 
+                                            yes= 6,
+                                            no= rooms ))%>% 
+  mutate(rooms=  ifelse(test=(rooms<= 1), 
+                            yes= 1,
+                            no= rooms ))
+
+test<- test %>% mutate(rooms=  ifelse(test=( rooms>= 6), 
+                                          yes= 6,
+                                          no= rooms ))%>% 
+  mutate(rooms=  ifelse(test=(rooms<= 1), 
+                            yes= 1,
+                            no= rooms ))
+
+impute_rooms <- function(df) {
+  df %>%
+    group_by(ESTRATO, bedrooms,bathrooms) %>%
+    mutate(rooms = ifelse(is.na(rooms), floor(mean(rooms, na.rm = TRUE)), rooms)) %>%
+    ungroup()
+}
+
+impute_rooms_2 <- function(df) {
+  df %>%
+    group_by(ESTRATO) %>%
+    mutate(rooms = ifelse(is.na(rooms), floor(mean(rooms, na.rm = TRUE)), rooms)) %>%
+    ungroup()
+}
+
+train <- impute_rooms(train)
+test <- impute_rooms(test)
+train <- impute_rooms_2(train)
+test <- impute_rooms_2(test)
+
+#Alcobas
+train<- train %>% mutate(bedrooms=  ifelse(test=( bedrooms>= 6), 
+                                        yes= 6,
+                                        no= bedrooms ))%>% 
+  mutate(bedrooms=  ifelse(test=(bedrooms<= 1), 
+                        yes= 1,
+                        no= bedrooms ))
+
+test<- test %>% mutate(bedrooms=  ifelse(test=( bedrooms>= 6), 
+                                      yes= 6,
+                                      no= bedrooms ))%>% 
+  mutate(bedrooms=  ifelse(test=(bedrooms<= 1), 
+                        yes= 1,
+                        no= bedrooms ))
+
+impute_bedrooms <- function(df) {
+  df %>%
+    group_by(ESTRATO, bedrooms,bathrooms) %>%
+    mutate(bedrooms = ifelse(is.na(bedrooms), floor(mean(bedrooms, na.rm = TRUE)), bedrooms)) %>%
+    ungroup()
+}
+
+impute_bedrooms_2 <- function(df) {
+  df %>%
+    group_by(ESTRATO) %>%
+    mutate(bedrooms = ifelse(is.na(bedrooms), floor(mean(bedrooms, na.rm = TRUE)), bedrooms)) %>%
+    ungroup()
+}
+
+train <- impute_bedrooms(train)
+test <- impute_bedrooms(test)
+train <- impute_bedrooms_2(train)
+test <- impute_bedrooms_2(test)
+
+
 
 ##########################################################
 ################ Limpieza de texto #######################
@@ -262,37 +371,92 @@ test<- test %>% mutate(area=  ifelse(test=( area>= up),
   mutate(area=  ifelse(test=(area<= low), 
                        yes= NA,
                        no= area ))
+############################################################
+################ Imputamos area #########################
+#Imputamos dadas caracaterísticas de otros aptos similares
+
+impute_area <- function(df) {
+  df %>%
+    group_by(bathrooms, ESTRATO, bedrooms,rooms) %>%
+    mutate(area = ifelse(is.na(area), mean(area, na.rm = TRUE), area)) %>%
+    ungroup()}
+
+impute_area_2 <- function(df) {
+  df %>%
+    group_by(ESTRATO) %>%
+    mutate(area = ifelse(is.na(area), mean(area, na.rm = TRUE), area)) %>%
+    ungroup()
+}
+
+
+train <- impute_area(train)
+test <- impute_area(test)
+train <- impute_area_2(train)
+test <- impute_area_2(test)
+
+summary(train)
+summary(test)
 
 
 ############################################################
 ################ Precio por mts^2 #########################
 #Train
-train <- train %>%
-  mutate(precio_mt2 = round(price / area, 0))
-low <- quantile(train$precio_mt2, 0.05,na.rm=T)
-up <- quantile(train$precio_mt2, 0.97,na.rm=T)
+#train <- train %>%
+#  mutate(precio_mt2 = round(price / area, 0))
+#low <- quantile(train$precio_mt2, 0.05,na.rm=T)
+#up <- quantile(train$precio_mt2, 0.97,na.rm=T)
 
 #Test
-test <- test %>%
-  mutate(precio_mt2 = round(price / area, 0))
-low <- quantile(test$precio_mt2, 0.05,na.rm=T)
-up <- quantile(test$precio_mt2, 0.97,na.rm=T)
+#test <- test %>%
+#  mutate(precio_mt2 = round(price / area, 0))
+#low <- quantile(test$precio_mt2, 0.05,na.rm=T)
+#up <- quantile(test$precio_mt2, 0.97,na.rm=T)
 
 #Visualización del precio por m^2 
-wdb <- st_drop_geometry(train)
-ggplot(wdb, aes(x = precio_mt2)) +
-  geom_histogram()+
-  theme_classic()
+#wdb <- st_drop_geometry(train)
+#ggplot(wdb, aes(x = precio_mt2)) +
+#  geom_histogram()+
+#  theme_classic()
+
 
 
 ############################################################
+#Algunas Distribuciones 
+plot_ban <- ggplot(test, aes(x = bathrooms)) +
+  geom_histogram(bins = 50, fill = "darkblue", alpha = 0.4) +
+  labs(x = "Baños", y = "Cantidad",
+       title = "Distribución de la Cantidad de Baños") +
+  theme_bw()
+ggplotly(plot_ban)
+
+plot_hab<- ggplot(test, aes(x = rooms)) +
+  geom_histogram(bins = 50, fill = "darkblue", alpha = 0.4) +
+  labs(x = "Habitaciones", y = "Cantidad",
+       title = "Distribución de la Cantidad de habitaciones") +
+  theme_bw()
+ggplotly(plot_hab)
+
+plot_alc <- ggplot(train, aes(x = bedrooms)) +
+  geom_histogram(bins = 50, fill = "darkblue", alpha = 0.4) +
+  labs(x = "Alcobas", y = "Cantidad",
+       title = "Distribución de la cantidad de alcobas") +
+  theme_bw()
+ggplotly(plot_alc)
+
+plot_are <- ggplot(test, aes(x = area)) +
+  geom_histogram(bins = 50, fill = "darkblue", alpha = 0.4) +
+  labs(x = "Area", y = "Cantidad",
+       title = "Distribución del Areas") +
+  theme_bw()
+ggplotly(plot_are)
+
 # Selección de Variables de interés y Est. descriptivas
 
 train<- train %>%
-  select(property_id,`price`,`month`,`year`,`rooms`,`bedrooms`,bathrooms, ESTRATO,area,precio_mt2,description,latitud,longitud )
+  select(property_id,`price`,`month`,`year`,`rooms`,`bedrooms`,bathrooms, ESTRATO,area,description,latitud,longitud,distancia_sm,distancia_cc )
 
 test<- test %>%
-  select(property_id,`price`,`month`,`year`,`rooms`,`bedrooms`,bathrooms, ESTRATO,area,precio_mt2,description,latitud,longitud )
+  select(property_id,`price`,`month`,`year`,`rooms`,`bedrooms`,bathrooms, ESTRATO,area,description,latitud,longitud,distancia_sm,distancia_cc )
 
 skim <- skim(train)
 skim <- data.frame(skim)
@@ -301,11 +465,13 @@ skim <- skim %>%
   kable_classic_2(full_width = F)
 
 # Visulaización de Missings
-vis_dat(as.data.frame(train))
+nas_train<- vis_dat(as.data.frame(train))
+nas_test <- vis_dat(as.data.frame(test))
 
 #matriz de corrrelación
+wdb <- as.data.frame(train)
 wdb<- wdb %>%
-  select(`price`,`month`,`year`,`rooms`,`bedrooms`,bathrooms, ESTRATO,area,precio_mt2)
+  select(`price`,`month`,`year`,`rooms`,`bedrooms`,bathrooms, ESTRATO,area)
 wdb <- na.omit(wdb)
 matriz_correlacion <- cor(wdb)
 matriz_correlacion <- matriz_correlacion %>%
