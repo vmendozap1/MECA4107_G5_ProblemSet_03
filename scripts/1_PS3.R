@@ -413,6 +413,12 @@ test <- impute_area_2(test)
 summary(train)
 summary(test)
 
+############################################################
+################ Codigo UPZ #########################
+
+train$codigo_upz[is.na(train$codigo_upz)] <- 0
+test$codigo_upz[is.na(test$codigo_upz)] <- 0
+
 
 ############################################################
 ################ Precio por mts^2 #########################
@@ -459,7 +465,7 @@ plot_alc <- ggplot(train, aes(x = bedrooms)) +
   theme_bw()
 ggplotly(plot_alc)
 
-plot_are <- ggplot(test, aes(x = area)) +
+plot_are <- ggplot(train, aes(x = area)) +
   geom_histogram(bins = 50, fill = "darkblue", alpha = 0.4) +
   labs(x = "Area", y = "Cantidad",
        title = "Distribución del Areas") +
@@ -467,7 +473,6 @@ plot_are <- ggplot(test, aes(x = area)) +
 ggplotly(plot_are)
 
 # Selección de Variables de interés y Est. descriptivas
-
 train<- train %>%
   select(property_id,`price`,`month`,`year`,`rooms`,`bedrooms`,bathrooms, ESTRATO,area,description,latitud,longitud,distancia_sm,distancia_cc,barrio,codigo_upz,codigo_localidad )
 

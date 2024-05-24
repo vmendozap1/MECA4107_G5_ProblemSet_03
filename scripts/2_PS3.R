@@ -58,7 +58,7 @@ mtry_grid<-expand.grid(mtry =c(10,17,25), # c(6,9!,11)
                        min.node.size= c(5,10,20,25), #c(25!,35,45,55,65,75) controla la complejidad del arbol
                        splitrule= 'variance') #splitrule 
 
-cv_RForest <- train(price~month+year+rooms+bedrooms+bathrooms+ESTRATO+area+latitud+longitud+distancia_sm+distancia_cc,
+cv_RForest <- train(price~month+year+rooms+bedrooms+bathrooms+ESTRATO+area+latitud+longitud+distancia_sm+distancia_cc+barrio+codigo_localidad+codigo_upz,
                     data = trainf, 
                     method = "ranger",
                     trControl = ctrl,
@@ -83,5 +83,5 @@ predictSample<- predictSample %>%
   select(property_id,price)
 
 
-write.csv(predictSample,"predictions/RF_4.csv", row.names = FALSE)
+write.csv(predictSample,"predictions/RF_5.csv", row.names = FALSE)
 
