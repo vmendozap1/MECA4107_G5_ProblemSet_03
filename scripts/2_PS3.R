@@ -12,18 +12,40 @@ p_load( tidyverse, # tidy-data
         sf,
         GADMTools,
         stringr,
-        stargazer
+        stargazer,
+        ranger
 )
 
 #Seleccionamos el directorio y Cargamos las bases de datos
 setwd("C:/Users/USER/OneDrive - Universidad de los andes/Semestre VIII/Big Data/MECA4107_G5_ProblemSet_03")
 
 #Cargamos las bases de Datos
-train<-read.csv("Data/trainfiltrado.csv")
-test<-read.csv("Data/testfiltrado.csv")
+trainf<-read.csv("Data/trainfiltrado.csv")
+testf<-read.csv("Data/testfiltrado.csv")
 template <- read.csv("Data/submission_template.csv")
+summary(trainf)
+summary(testf)
 
-train <- na.omit(train)
+#Convertir a Var categóricas
+trainf$bedrooms <- as.factor(trainf$bedrooms)
+trainf$ESTRATO<- as.factor(trainf$ESTRATO)
+trainf$bathrooms<- as.factor(trainf$bathrooms)
+trainf$rooms<- as.factor(trainf$rooms)
+trainf$year<- as.factor(trainf$year)
+trainf$month<- as.factor(trainf$month)
+trainf$barrio<- as.factor(trainf$barrio)
+trainf$codigo_upz<- as.factor(trainf$codigo_upz)
+trainf$codigo_localidad<- as.factor(trainf$codigo_localidad)
+
+testf$bedrooms <- as.factor(testf$bedrooms)
+testf$ESTRATO<- as.factor(testf$ESTRATO)
+testf$bathrooms<- as.factor(testf$bathrooms)
+testf$rooms<- as.factor(testf$rooms)
+testf$year<- as.factor(testf$year)
+testf$month<- as.factor(testf$month)
+testf$barrio<- as.factor(testf$barrio)
+testf$codigo_upz<- as.factor(testf$codigo_upz)
+testf$codigo_localidad<- as.factor(testf$codigo_localidad)
 
 
 #Random Forest Intento
@@ -32,12 +54,12 @@ set.seed(4926)
 ctrl<- trainControl(method = "cv",
                     number = 5)
 
-mtry_grid<-expand.grid(mtry =c(15,18,20), # c(8,11,15)
-                       min.node.size= c(15,20,25,30,35), #controla la complejidad del arbol
+mtry_grid<-expand.grid(mtry =c(10,17,25), # c(6,9!,11)
+                       min.node.size= c(5,10,20,25), #c(25!,35,45,55,65,75) controla la complejidad del arbol
                        splitrule= 'variance') #splitrule 
 
-cv_RForest <- train(price~., 
-                    data = train, 
+cv_RForest <- train(price~month+year+rooms+bedrooms+bathrooms+ESTRATO+area+latitud+longitud+distancia_sm+distancia_cc+barrio+codigo_localidad+codigo_upz,
+                    data = trainf, 
                     method = "ranger",
                     trControl = ctrl,
                     metric="MAE",
@@ -46,30 +68,20 @@ cv_RForest <- train(price~.,
                     importance="impurity")
 cv_RForest
 
-#Predicción rápida
+#Ver las VAriables más Importantes
+varImp(cv_RForest)
 
 
-modelo <- lm(price ~., data = train)
-stargazer(modelo,type="text")
+#Envío para Kagglee
 
-predictSample <- test   %>% 
-  mutate(price = predict(modelo, newdata = test))%>% 
-  select(property_id,price)
+predictSample <- testf   %>% 
+  mutate(price = predict(cv_RForest, newdata = testf)    ## predicted class labels
+  )  %>% select(property_id,price)
 
 predictSample<- predictSample %>% 
   left_join(template) %>% 
   select(property_id,price)
 
 
-#Envío para Kagglee
+write.csv(predictSample,"predictions/RF_5.csv", row.names = FALSE)
 
-predictSample <- test   %>% 
-  mutate(price = predict(cv_RForest, newdata = test)    ## predicted class labels
-  )  %>% select(property_id,price)
-
-predictSample<- predictSample %>% 
-  left_join(test_hogares) %>% 
-  select(property_id,Ingpcug,Lp)
-
-
-write.csv(predictSample,"regression_RandomForest_1.csv", row.names = FALSE)
