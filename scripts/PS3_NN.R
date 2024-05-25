@@ -21,59 +21,45 @@ p_load( tidyverse, # tidy-data
 #Seleccionamos el directorio y Cargamos las bases de datos
 setwd("C://Users//AlfredoRP//OneDrive - INALDE Business School - Universidad de La Sabana//Attachments//Economia//ML//Problem set 3//PS3//MECA4107_G5_ProblemSet_03//Data")
 
-#Cargamos las bases de Datos
-train<-read.csv("trainfiltrado.csv")
-test<-read.csv("testfiltrado.csv")
+train <- read.csv("trainfiltrado.csv")
+test <- read.csv("testfiltrado.csv")
 template <- read.csv("submission_template.csv")
 
 #train <- na.omit(train)#
 
+#Red Neuronal con Keras ##
+y <- log(train$price)
+x <- as.matrix(train %>%  month, year, rooms, bedrooms, bathrooms, ESTRATO, area, precio_mt2)
+x <- scale(x)
 
-#Red Neuronal 1 nnet ## 1 capa ##
+##
 
-##Train
+nn_1 <- keras_model_sequential() %>%
+  layer_dense(units = 10, avtivation = "relu",
+              input_shape = ncol(x)) %>%
+  layer_dense(units = 1)
 
-set.seed(4926)
+nn_1 %>% compile(loss = "mse",
+                 optimizer = 'adam',
+                 metrics = list("mean_absolute_error")
+)
 
-nn_1 <- nnet(price ~ month + year + rooms + bedrooms + bathrooms + ESTRATO + area + precio_mt2,
-             data = train,
-             size = 60,
-             lineout = TRUE
-             )
+set.seed(889845)
+history <- nn_1 %>% fit(
+  x, y,
+  epochs = 30,
+  batch_size = 256,
+  validation_split = 0.2
+)
 
-##Test
-pred_nn_1 <- predict(nn_1, newdata = test)
+plot(history)
 
-ctrl<- trainControl(method = "cv",
-                    number = 5)
+nn_1 %>% evaluate(x,y)
 
-mtry_grid<-expand.grid(mtry =c(15,18,20), # c(8,11,15)
-                       min.node.size= c(15,20,25,30,35), #controla la complejidad del arbol
-                       splitrule= 'variance') #splitrule 
+x_test <- test %>% select(month, year, rooms, bedrooms, bathrooms, ESTRATO, area, precio_mt2)
 
-cv_RForest <- train(price~., 
-                    data = train, 
-                    method = "ranger",
-                    trControl = ctrl,
-                    metric="MAE",
-                    tuneGrid = mtry_grid,
-                    ntree=500,
-                    importance="impurity")
-cv_RForest
+y_pred <- nn_1 %>% predict(x_test)
 
-#Predicción rápida
-
-
-modelo <- lm(price ~., data = train)
-stargazer(modelo,type="text")
-
-predictSample <- test   %>% 
-  mutate(price = predict(modelo, newdata = test))%>% 
-  select(property_id,price)
-
-predictSample<- predictSample %>% 
-  left_join(template) %>% 
-  select(property_id,price)
 
 
 #Envío para Kagglee
@@ -87,4 +73,20 @@ predictSample<- predictSample %>%
   select(property_id,Ingpcug,Lp)
 
 
-write.csv(predictSample,"regression_RandomForest_1.csv", row.names = FALSE)
+write.csv(predictSample,"neunoral_network_1.csv", row.names = FALSE)
+
+
+##Red Neuronal con NNET ##
+
+y <- log(train$price)
+x <- as.matrix(train %>%  select(month, year, rooms, bedrooms, bathrooms, ESTRATO, area, precio_mt2))
+x <- scale(x)
+
+nn_2 <- nnet(y ~ x,
+             data = train,
+             size = 60,
+             lineout = TRUE)
+
+y_pred_2 <- predict(nn_2, newdata = test)
+
+
