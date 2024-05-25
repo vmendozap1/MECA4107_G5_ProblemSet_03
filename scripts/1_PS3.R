@@ -25,12 +25,14 @@ p_load( tidyverse, # tidy-data
         SentimentAnalysis,
         tm,
         udpipe,
-        syuzhet
+        syuzhet,
+        rio,
+        stopwords  
         
 )
 
 #Seleccionamos el directorio y Cargamos las bases de datos
-setwd("C:/Users/USER/OneDrive - Universidad de los andes/Semestre VIII/Big Data/MECA4107_G5_ProblemSet_03")
+setwd("C:/Users/USER/OneDrive - Universidad de los andes/Semestre VIII/Big Data/MECA4107_G5_ProblemSet_03_v2")
 #setwd("C:/Users/madag/OneDrive - Universidad de los andes/Semestre VIII/Big Data/MECA4107_G5_ProblemSet_03")
 
 
@@ -431,7 +433,7 @@ test$codigo_upz[is.na(test$codigo_upz)] <- 0
 #Creamos el Corpus
 descripcion <- train$description
 
-#preprocesamiento
+#Preprocesamiento
 descripcion <- removeNumbers(descripcion)
 descripcion <- removePunctuation(descripcion)
 descripcion <- tolower(descripcion)
@@ -440,24 +442,19 @@ descripcion <- stripWhitespace(descripcion)
 #Tokenizamos
 descripcion_tidy <- as.data.frame(descripcion) %>% unnest_tokens( "word", descripcion)
 
-#Palabras Freceuntes
-descripcion_tidy  %>% 
-  count(word, sort = TRUE)   %>% 
-  head()
-
 #Eliminamos Stopwords
 descripcion_tidy <- descripcion_tidy  %>% 
   anti_join(tibble(word =stopwords("spanish")))
 
-#Analisis Exploratorio
-wcloud <- wordcloud(descripcion_tidy$word, min.freq = 100, 
-          colors= c(rgb(72/255, 191/255, 169/255),rgb(249/255, 220/255, 92/255), rgb(229/255, 249/255, 147/255))) 
-
 # Definimos stop words adicionales 
-custom_stopwords <- c("comida", "restaurante", "lugar", "día")
+custom_stopwords <- c("comida")
 
-# Eliminamos los nuevos stop words
-descripcion_tidy <- anti_join(descripcion_tidy, data.frame(word = custom_stopwords))
+
+#Palabras Freceuntes
+pal_frecuentes <- descripcion_tidy  %>% 
+  count(word, sort = TRUE)   %>% 
+  head()
+
 
 #Raiz de la Palabra
 
@@ -486,7 +483,7 @@ bigram_freq <- bigrams %>%
   count(bigram, sort = TRUE)
 
 # Visualizar los bigramas más frecuentes
-ggplot(bigram_freq[1:10, ], aes(y = reorder(bigram, -n), x = n)) +
+ggplot(bigram_freq[1:20, ], aes(y = reorder(bigram, -n), x = n)) +
   geom_bar(stat = "identity", fill = "orange") +
   ggtitle("Bigramas más frecuentes") +
   ylab("Bigramas") +
@@ -513,11 +510,124 @@ adjetivos1 <- reviews_tibble1 %>%
   filter(upos == "ADJ") %>%
   select(token)
 
-# Asociar los sentiemintos (esto puede ser demorado)
-sentimientos_df <- get_nrc_sentiment(adjetivos1$token, lang="spanish")
-sentimientos_df$adjetivos  = adjetivos1$token
+#####################################
+#Volvemos los comentarios Regresores
+descriptions_tr <- train$description
+descriptions_te <- test$description
 
-head(sentimientos_df, 10)
+descriptions_source_tr <- VectorSource(descriptions_tr)
+descriptions_source_te <- VectorSource(descriptions_te)
+
+# Make a volatile corpus: coffee_corpus (Asociamos metadata a cada doc)
+description_corpus_tr <- VCorpus(descriptions_source_tr, readerControl = list( language = "es"))
+description_corpus_te <- VCorpus(descriptions_source_te, readerControl = list( language = "es"))
+
+#Limpieza de texto
+# Función para reemplazar números por palabras
+
+reemplazar_numeros <- function(texto) {
+  palabras <- c("cero", "uno", "dos", "tres", "cuatro", "cinco", "seis", "siete", "ocho", "nueve", "diez")
+  # Reemplazar números del 0 al 10 por palabras
+  for (i in 0:10) {
+    texto <- gsub(sprintf("\\b%d\\b", i), palabras[i + 1], texto)
+  }
+  return(texto)
+}
+eliminar_tildes <- function(texto) {
+  # Convertir texto a formato ASCII eliminando tildes y caracteres especiales
+  texto_sin_tildes <- iconv(texto, "UTF-8", "ASCII", sub = "")
+  return(texto_sin_tildes)
+}
+
+
+reemplazar_car_especiales <- function(texto) {
+  
+  texto_sin_espe <-str_replace_all(texto, "[^[:alnum:]]", " ")
+  return(texto_sin_espe)
+}
+
+## volver a las palabras a sus raíces
+
+stem_espanol<-  function(texto) {
+  
+  texto_stem <- stemDocument(texto, language="spanish")
+  return(texto_stem)
+}
+
+# Descargamos la lista de las stopwords en español de dos fuentes diferentes y las combinamos
+lista_palabras1 <- stopwords(language = "es", source = "snowball")
+lista_palabras2 <- stopwords(language = "es", source = "nltk")
+lista_palabras <- union(lista_palabras1, lista_palabras2)
+lista_palabras<- union(lista_palabras,  c("vendo", "venta", "vende", "etc", "carrera", "calle", "casa", "apto", "apartamento") )
+
+#Consolidamos las funciones
+clean_corpus <- function(corpus){
+  corpus <- tm_map(corpus, stripWhitespace) ## remover espacios en blanco
+  corpus <- tm_map(corpus, removePunctuation)  ## remover puntuacióm
+  corpus <- tm_map(corpus, content_transformer(tolower)) # todo minuscula 
+  corpus <- tm_map(corpus, removeWords, c(lista_palabras)) # remover stopwords y otras que se quieran añádir
+  corpus<-  tm_map(corpus, content_transformer(reemplazar_numeros))  ## incluir funciones que nosotros creamos 
+  corpus<-  tm_map(corpus, content_transformer(eliminar_tildes))  ## incluir funciones que nosotros creamos
+  corpus<-  tm_map(corpus, content_transformer(reemplazar_car_especiales))  ## incluir funciones que nosotros creamos
+  corpus<-  tm_map(corpus, content_transformer(stem_espanol))
+  corpus<-  tm_map(corpus, removeNumbers)  # remover numeros restantes
+  return(corpus)
+}
+
+
+# apliquemos nuestra función de limpieza:
+clean_description_tr <- clean_corpus(description_corpus_tr)
+clean_description_te <- clean_corpus(description_corpus_te)
+
+#Creación de la Document matrix term
+description_dtm_tr <- DocumentTermMatrix(clean_description_tr)
+description_dtm_te <- DocumentTermMatrix(clean_description_te)
+inspeccion <- inspect(description_dtm_tr)
+
+description_m_tr <- as.data.frame(as.matrix(removeSparseTerms(description_dtm_tr, 0.9), sparse=TRUE))
+description_m_te <- as.data.frame(as.matrix(removeSparseTerms(description_dtm_te, 0.9), sparse=TRUE))
+
+description_m_tr <- description_m_tr %>%
+  mutate(id= train$property_id)
+description_m_te <- description_m_te %>%
+  mutate(id= test$property_id)
+
+#Análisis PCA
+
+pcdescriptions <- prcomp(as.matrix(removeSparseTerms(description_dtm, 0.9), sparse=TRUE), scale=TRUE)
+## podemos obtener la varianza explicada
+
+variance_explained <- pcdescriptions$sdev^2 / sum(pcdescriptions$sdev^2)
+
+df <- data.frame(component = seq_along(variance_explained),
+                 explained_variance = variance_explained,
+                 cumulative_variance = cumsum(variance_explained))
+
+# Plot explained variance
+a<- ggplot(df, aes(x = component, y = explained_variance)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  labs(title = "Explained Variance by Principal Component",
+       x = "Principal Component",
+       y = "Explained Variance") +
+  theme_minimal()
+
+
+b <- ggplot(df, aes(x = component, y = cumulative_variance)) +
+  geom_line(color = "blue") +
+  geom_point(color = "blue") +
+  labs(title = "Cumulative Variance by Principal Component",
+       x = "Principal Component",
+       y = "Cumulative Variance") +
+  theme_minimal()
+
+rm(df)
+
+
+p_load(gridExtra)
+
+grid.arrange(a, b, ncol = 2)
+
+
 
 ############################################################
 ################ Precio por mts^2 #########################
@@ -573,10 +683,10 @@ ggplotly(plot_are)
 
 # Selección de Variables de interés y Est. descriptivas
 train<- train %>%
-  select(property_id,`price`,`month`,`year`,`rooms`,`bedrooms`,bathrooms, ESTRATO,area,description,latitud,longitud,distancia_sm,distancia_cc,barrio,codigo_upz,codigo_localidad )
+  select(property_id,`price`,`month`,`year`,`rooms`,`bedrooms`,bathrooms, ESTRATO,area,description,latitud,longitud,distancia_sm,distancia_cc,barrio,codigo_upz,codigo_localidad,description,property_type )
 
 test<- test %>%
-  select(property_id,`price`,`month`,`year`,`rooms`,`bedrooms`,bathrooms, ESTRATO,area,description,latitud,longitud,distancia_sm,distancia_cc,barrio,codigo_upz,codigo_localidad )
+  select(property_id,`price`,`month`,`year`,`rooms`,`bedrooms`,bathrooms, ESTRATO,area,description,latitud,longitud,distancia_sm,distancia_cc,barrio,codigo_upz,codigo_localidad,description,property_type )
 
 skim <- skim(train)
 skim <- data.frame(skim)
