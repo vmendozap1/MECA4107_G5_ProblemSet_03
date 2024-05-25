@@ -19,7 +19,14 @@ p_load( tidyverse, # tidy-data
         GADMTools,
         stringr,
         ggplot2,
-        plotly 
+        plotly,
+        wordcloud,
+        tidytext,
+        SentimentAnalysis,
+        tm,
+        udpipe,
+        syuzhet
+        
 )
 
 #Seleccionamos el directorio y Cargamos las bases de datos
@@ -419,6 +426,98 @@ summary(test)
 train$codigo_upz[is.na(train$codigo_upz)] <- 0
 test$codigo_upz[is.na(test$codigo_upz)] <- 0
 
+############################################################
+########## Filtrado  de texto: Descripción  ################
+#Creamos el Corpus
+descripcion <- train$description
+
+#preprocesamiento
+descripcion <- removeNumbers(descripcion)
+descripcion <- removePunctuation(descripcion)
+descripcion <- tolower(descripcion)
+descripcion <- stripWhitespace(descripcion)
+
+#Tokenizamos
+descripcion_tidy <- as.data.frame(descripcion) %>% unnest_tokens( "word", descripcion)
+
+#Palabras Freceuntes
+descripcion_tidy  %>% 
+  count(word, sort = TRUE)   %>% 
+  head()
+
+#Eliminamos Stopwords
+descripcion_tidy <- descripcion_tidy  %>% 
+  anti_join(tibble(word =stopwords("spanish")))
+
+#Analisis Exploratorio
+wcloud <- wordcloud(descripcion_tidy$word, min.freq = 100, 
+          colors= c(rgb(72/255, 191/255, 169/255),rgb(249/255, 220/255, 92/255), rgb(229/255, 249/255, 147/255))) 
+
+# Definimos stop words adicionales 
+custom_stopwords <- c("comida", "restaurante", "lugar", "día")
+
+# Eliminamos los nuevos stop words
+descripcion_tidy <- anti_join(descripcion_tidy, data.frame(word = custom_stopwords))
+
+#Raiz de la Palabra
+
+descripcion_tidy$radical <- stemDocument( descripcion_tidy$word, language="spanish")
+descripcion_tidy %>% head()
+
+#N-gramas
+# Generar bigramas a partir del texto de las críticas
+bigrams <- as.data.frame(descripcion) %>%
+  unnest_tokens(bigram, descripcion, token = "ngrams", n = 2)
+
+
+stop_words <- data.frame(word1 = stopwords("es"), 
+                         word2 = stopwords("es"))
+
+
+# Eliminar los bigramas que contengan palabras de parada
+bigrams <- bigrams %>%
+  separate(bigram, c("word1", "word2"), sep = " ") %>%
+  anti_join(stop_words, by = "word1") %>%
+  anti_join(stop_words, by = "word2") %>%
+  unite(bigram, word1, word2, sep = " ")
+
+# Calcular la frecuencia de los bigramas
+bigram_freq <- bigrams %>%
+  count(bigram, sort = TRUE)
+
+# Visualizar los bigramas más frecuentes
+ggplot(bigram_freq[1:10, ], aes(y = reorder(bigram, -n), x = n)) +
+  geom_bar(stat = "identity", fill = "orange") +
+  ggtitle("Bigramas más frecuentes") +
+  ylab("Bigramas") +
+  xlab("Frecuencia")
+
+model <- udpipe_download_model(language = "spanish")
+
+model <- udpipe_load_model(model$file_model)
+
+# Separar bigramas 
+bigrams_sep <- bigrams %>%
+  separate(bigram, c("word1", "word2"), sep = " ") 
+
+# Anotar las partes del discurso en las reseñas
+reviews_annotated1 <- udpipe_annotate(model, bigrams_sep$word1)
+
+
+# Convertir los resultados a formato tibble
+reviews_tibble1 <- as.data.frame(reviews_annotated1) %>%
+  select(token, upos)
+
+# Filtrar solo los adjetivos
+adjetivos1 <- reviews_tibble1 %>%
+  filter(upos == "ADJ") %>%
+  select(token)
+
+# Asociar los sentiemintos (esto puede ser demorado)
+sentimientos_df <- get_nrc_sentiment(adjetivos1$token, lang="spanish")
+sentimientos_df$adjetivos  = adjetivos1$token
+
+head(sentimientos_df, 10)
 
 ############################################################
 ################ Precio por mts^2 #########################

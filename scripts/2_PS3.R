@@ -54,8 +54,8 @@ set.seed(4926)
 ctrl<- trainControl(method = "cv",
                     number = 5)
 
-mtry_grid<-expand.grid(mtry =c(10,17,25), # c(6,9!,11)
-                       min.node.size= c(5,10,20,25), #c(25!,35,45,55,65,75) controla la complejidad del arbol
+mtry_grid<-expand.grid(mtry =c(30,40,50), # c(6,9!,11)
+                       min.node.size= c(3,4,5,6), #c(5!,10,20,25) controla la complejidad del arbol
                        splitrule= 'variance') #splitrule 
 
 cv_RForest <- train(price~month+year+rooms+bedrooms+bathrooms+ESTRATO+area+latitud+longitud+distancia_sm+distancia_cc+barrio+codigo_localidad+codigo_upz,
@@ -83,5 +83,5 @@ predictSample<- predictSample %>%
   select(property_id,price)
 
 
-write.csv(predictSample,"predictions/RF_5.csv", row.names = FALSE)
+write.csv(predictSample,"predictions/RF_6.csv", row.names = FALSE)
 
