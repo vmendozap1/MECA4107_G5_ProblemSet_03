@@ -27,7 +27,9 @@ p_load( tidyverse, # tidy-data
         udpipe,
         syuzhet,
         rio,
-        stopwords  
+        stopwords,
+        gridExtra,
+        stplanr
         
 )
 
@@ -51,8 +53,8 @@ test$latitud <- test$lat
 
 mzbarrio <- st_transform(mzbarrio, crs = 4326)
 barrio <- st_transform(barrio, crs = 4326)
-coordinates_tr <- st_as_sf(train, coords = c("lon", "lat"), crs = st_crs(mzbarrio))
-coordinates_te <- st_as_sf(test, coords = c("lon", "lat"), crs = st_crs(mzbarrio))
+coordinates_tr_vis <- st_as_sf(train, coords = c("lon", "lat"), crs = st_crs(mzbarrio))
+coordinates_te_vis <- st_as_sf(test, coords = c("lon", "lat"), crs = st_crs(mzbarrio))
 
 ##########################################################
 ###########Primeras Visualizaciones #####################
@@ -70,7 +72,7 @@ leaflet() %>%
 #Visualizamos los apartamentos por ubicación
 leaflet() %>% 
   addTiles() %>%  #capa base
-  addCircles(data=coordinates_tr$geometry, fillColor = "blue",color = "blue",weight = 1)
+  addCircles(data=coordinates_tr_vis$geometry, fillColor = "blue",color = "blue",weight = 1)
 
 #Plot de estratos por manzana e inmuebles
 colores_estrato <- colorNumeric(palette = "RdYlBu", domain = mzbarrio$ESTRATO)
@@ -84,8 +86,21 @@ leaflet() %>%
   addTiles() %>%  # Capa base
   addPolygons(data = mzbarrio, fillColor = "#00BFFF", color = "#00BFFF", weight = 1) %>%
   setView(lng = longitud_central, lat = latitud_central, zoom = 9) %>% 
-  addCircles(data = coordinates_tr$geometry, fillColor = "#104E8B", color = "#104E8B", weight = 1) 
-  
+  addCircles(data = coordinates_tr_vis$geometry, fillColor = "#104E8B", color = "#104E8B", weight = 1) 
+
+#############################################################
+#Unificamos temporalmente test y train
+###########################################################
+test<- test %>%
+  mutate(es_test=1)
+train<- train %>%
+  mutate(es_test=0)
+train_backup <- train
+train <- rbind(train, test)
+
+#Nuevas Cooredenadas
+coordinates_tr <- st_as_sf(train, coords = c("lon", "lat"), crs = st_crs(mzbarrio))
+coordinates_te <- st_as_sf(test, coords = c("lon", "lat"), crs = st_crs(mzbarrio))
 
 ##########################################################
 ### Agregamos la variable estrato ########################
@@ -115,8 +130,9 @@ cc <- opq(bbox = getbb("Bogota Colombia")) %>%
   add_osm_feature(key = "shop" , value = "mall") 
 
 # Cambiamos el formato para que sea un objeto sf (simple features)
-cc_sf <- osmdata_sf(cc)
+#cc_sf <- osmdata_sf(cc)
 
+cc_sfdddd <- osmdata_sf(cc)
 # De las features del parque nos interesa su geomoetría y donde estan ubicados 
 cc_geometria <- cc_sf$osm_polygons %>% 
   dplyr::select(osm_id, name) 
@@ -165,6 +181,7 @@ plot <- ggplot(train, aes(x = distancia_cc)) +
 ggplotly(plot)
 
 
+
 ##########################################################
 ### Agregamos Distamcia al Supermercado más cercano ######
 
@@ -173,7 +190,7 @@ sm <- opq(bbox = getbb("Bogota Colombia")) %>%
   add_osm_feature(key = "shop" , value = "supermarket") 
 
 # Cambiamos el formato para que sea un objeto sf (simple features)
-sm_sf <- osmdata_sf(sm)
+#sm_sf <- osmdata_sf(sm)
 
 # De las features del parque nos interesa su geomoetría y donde estan ubicados 
 sm_geometria <- sm_sf$osm_polygons %>% 
@@ -225,11 +242,11 @@ ggplotly(plot)
 ################ Outliers         #######################
 #Baños
 train<- train %>% mutate(bathrooms=  ifelse(test=( bathrooms>= 5), 
-                                     yes= 5,
-                                     no= bathrooms ))%>% 
+                                            yes= 5,
+                                            no= bathrooms ))%>% 
   mutate(bathrooms=  ifelse(test=(bathrooms<= 1), 
-                       yes= 1,
-                       no= bathrooms ))
+                            yes= 1,
+                            no= bathrooms ))
 
 test<- test %>% mutate(bathrooms=  ifelse(test=( bathrooms>= 5), 
                                           yes= 5,
@@ -261,18 +278,18 @@ summary(test)
 
 #Habitaciones
 train<- train %>% mutate(rooms=  ifelse(test=( rooms>= 6), 
-                                            yes= 6,
-                                            no= rooms ))%>% 
+                                        yes= 6,
+                                        no= rooms ))%>% 
   mutate(rooms=  ifelse(test=(rooms<= 1), 
-                            yes= 1,
-                            no= rooms ))
+                        yes= 1,
+                        no= rooms ))
 
 test<- test %>% mutate(rooms=  ifelse(test=( rooms>= 6), 
-                                          yes= 6,
-                                          no= rooms ))%>% 
+                                      yes= 6,
+                                      no= rooms ))%>% 
   mutate(rooms=  ifelse(test=(rooms==0), 
-                            yes= 1,
-                            no= rooms ))
+                        yes= 1,
+                        no= rooms ))
 
 impute_rooms <- function(df) {
   df %>%
@@ -295,18 +312,18 @@ test <- impute_rooms_2(test)
 
 #Alcobas
 train<- train %>% mutate(bedrooms=  ifelse(test=( bedrooms>= 6), 
-                                        yes= 6,
-                                        no= bedrooms ))%>% 
+                                           yes= 6,
+                                           no= bedrooms ))%>% 
   mutate(bedrooms=  ifelse(test=(bedrooms<= 1), 
-                        yes= 1,
-                        no= bedrooms ))
+                           yes= 1,
+                           no= bedrooms ))
 
 test<- test %>% mutate(bedrooms=  ifelse(test=( bedrooms>= 6), 
-                                      yes= 6,
-                                      no= bedrooms ))%>% 
+                                         yes= 6,
+                                         no= bedrooms ))%>% 
   mutate(bedrooms=  ifelse(test=(bedrooms== 0), 
-                        yes= 1,
-                        no= bedrooms ))
+                           yes= 1,
+                           no= bedrooms ))
 
 impute_bedrooms <- function(df) {
   df %>%
@@ -330,7 +347,7 @@ test <- impute_bedrooms_2(test)
 
 
 ##########################################################
-################ Limpieza de texto #######################
+######## Primera Limpieza de texto #######################
 ##Normalización
 #Train
 # Todo en minuscula
@@ -374,11 +391,11 @@ train <- train %>%
 low <- quantile(train$area, 0.05,na.rm=T)
 up <- quantile(train$area, 0.90,na.rm=T)
 train<- train %>% mutate(area=  ifelse(test=( area>= up), 
-                                         yes= NA,
-                                         no= area ))%>% 
+                                       yes= NA,
+                                       no= area ))%>% 
   mutate(area=  ifelse(test=(area<= low), 
-                                         yes= NA,
-                                         no= area ))
+                       yes= NA,
+                       no= area ))
 #Test
 test <- test %>%
   mutate(area= str_extract(description, "(\\d+) mts|(\\d+) mt2|(\\d+) metros|(\\d+) m2|(\\d+) m^2"))
@@ -391,8 +408,8 @@ test <- test %>%
 low <- quantile(test$area, 0.05,na.rm=T)
 up <- quantile(test$area, 0.90,na.rm=T)
 test<- test %>% mutate(area=  ifelse(test=( area>= up), 
-                                       yes= NA,
-                                       no= area ))%>% 
+                                     yes= NA,
+                                     no= area ))%>% 
   mutate(area=  ifelse(test=(area<= low), 
                        yes= NA,
                        no= area ))
@@ -428,89 +445,19 @@ summary(test)
 train$codigo_upz[is.na(train$codigo_upz)] <- 0
 test$codigo_upz[is.na(test$codigo_upz)] <- 0
 
+# Eliminamos Variables innecesarias
+train<- train %>%
+  select(-operation_type,-surface_total,-surface_covered,-OBJECTID,-CODIGO_ZON,-CODIGO_CRI,-NORMATIVA,-ACTO_ADMIN,NUMERO_ACT,-FECHA_ACTO,-ESCALA_CAP,-FECHA_CAPT,-RESPONSABL,-SHAPE_AREA,-SHAPE_LEN,-objectid,-origen_ilegal,-escala_captura,-fecha_captura,-codigo_barrio_h,-formacion,-actualizacion,-codigo_zona,-responsable,-globalid,-shape_area,shape_len,-geo_point_2d,-NUMERO_ACT,-CODIGO_MAN,-shape_len)
+
+test<- test %>%
+  select(-operation_type,-surface_total,-surface_covered,-OBJECTID,-CODIGO_ZON,-CODIGO_CRI,-NORMATIVA,-ACTO_ADMIN,NUMERO_ACT,-FECHA_ACTO,-ESCALA_CAP,-FECHA_CAPT,-RESPONSABL,-SHAPE_AREA,-SHAPE_LEN,-objectid,-origen_ilegal,-escala_captura,-fecha_captura,-codigo_barrio_h,-formacion,-actualizacion,-codigo_zona,-responsable,-globalid,-shape_area,shape_len,-geo_point_2d,-NUMERO_ACT,-CODIGO_MAN,-shape_len)
+
+
 ############################################################
 ########## Filtrado  de texto: Descripción  ################
-#Creamos el Corpus
-descripcion <- train$description
-
-#Preprocesamiento
-descripcion <- removeNumbers(descripcion)
-descripcion <- removePunctuation(descripcion)
-descripcion <- tolower(descripcion)
-descripcion <- stripWhitespace(descripcion)
-
-#Tokenizamos
-descripcion_tidy <- as.data.frame(descripcion) %>% unnest_tokens( "word", descripcion)
-
-#Eliminamos Stopwords
-descripcion_tidy <- descripcion_tidy  %>% 
-  anti_join(tibble(word =stopwords("spanish")))
-
-# Definimos stop words adicionales 
-custom_stopwords <- c("comida")
+############################################################
 
 
-#Palabras Freceuntes
-pal_frecuentes <- descripcion_tidy  %>% 
-  count(word, sort = TRUE)   %>% 
-  head()
-
-
-#Raiz de la Palabra
-
-descripcion_tidy$radical <- stemDocument( descripcion_tidy$word, language="spanish")
-descripcion_tidy %>% head()
-
-#N-gramas
-# Generar bigramas a partir del texto de las críticas
-bigrams <- as.data.frame(descripcion) %>%
-  unnest_tokens(bigram, descripcion, token = "ngrams", n = 2)
-
-
-stop_words <- data.frame(word1 = stopwords("es"), 
-                         word2 = stopwords("es"))
-
-
-# Eliminar los bigramas que contengan palabras de parada
-bigrams <- bigrams %>%
-  separate(bigram, c("word1", "word2"), sep = " ") %>%
-  anti_join(stop_words, by = "word1") %>%
-  anti_join(stop_words, by = "word2") %>%
-  unite(bigram, word1, word2, sep = " ")
-
-# Calcular la frecuencia de los bigramas
-bigram_freq <- bigrams %>%
-  count(bigram, sort = TRUE)
-
-# Visualizar los bigramas más frecuentes
-ggplot(bigram_freq[1:20, ], aes(y = reorder(bigram, -n), x = n)) +
-  geom_bar(stat = "identity", fill = "orange") +
-  ggtitle("Bigramas más frecuentes") +
-  ylab("Bigramas") +
-  xlab("Frecuencia")
-
-model <- udpipe_download_model(language = "spanish")
-
-model <- udpipe_load_model(model$file_model)
-
-# Separar bigramas 
-bigrams_sep <- bigrams %>%
-  separate(bigram, c("word1", "word2"), sep = " ") 
-
-# Anotar las partes del discurso en las reseñas
-reviews_annotated1 <- udpipe_annotate(model, bigrams_sep$word1)
-
-
-# Convertir los resultados a formato tibble
-reviews_tibble1 <- as.data.frame(reviews_annotated1) %>%
-  select(token, upos)
-
-# Filtrar solo los adjetivos
-adjetivos1 <- reviews_tibble1 %>%
-  filter(upos == "ADJ") %>%
-  select(token)
-
-#####################################
 #Volvemos los comentarios Regresores
 descriptions_tr <- train$description
 descriptions_te <- test$description
@@ -588,23 +535,30 @@ description_m_tr <- as.data.frame(as.matrix(removeSparseTerms(description_dtm_tr
 description_m_te <- as.data.frame(as.matrix(removeSparseTerms(description_dtm_te, 0.9), sparse=TRUE))
 
 description_m_tr <- description_m_tr %>%
-  mutate(id= train$property_id)
+  mutate(property_id= train$property_id)
 description_m_te <- description_m_te %>%
-  mutate(id= test$property_id)
+  mutate(property_id= test$property_id)
 
 #Análisis PCA
 
-pcdescriptions <- prcomp(as.matrix(removeSparseTerms(description_dtm, 0.9), sparse=TRUE), scale=TRUE)
+pcdescriptions_tr <- prcomp(as.matrix(removeSparseTerms(description_dtm_tr, 0.9), sparse=TRUE), scale=TRUE)
+pcdescriptions_te <- prcomp(as.matrix(removeSparseTerms(description_dtm_te, 0.9), sparse=TRUE), scale=TRUE)
+
 ## podemos obtener la varianza explicada
 
-variance_explained <- pcdescriptions$sdev^2 / sum(pcdescriptions$sdev^2)
+variance_explained_tr <- pcdescriptions_tr$sdev^2 / sum(pcdescriptions_tr$sdev^2)
+variance_explained_te <- pcdescriptions_te$sdev^2 / sum(pcdescriptions_te$sdev^2)
 
-df <- data.frame(component = seq_along(variance_explained),
-                 explained_variance = variance_explained,
-                 cumulative_variance = cumsum(variance_explained))
+df_tr <- data.frame(component_tr = seq_along(variance_explained_tr),
+                    explained_variance_tr = variance_explained_tr,
+                    cumulative_variance_tr = cumsum(variance_explained_tr))
+
+df_te <- data.frame(component_te = seq_along(variance_explained_te),
+                    explained_variance_te = variance_explained_te,
+                    cumulative_variance_te = cumsum(variance_explained_te))
 
 # Plot explained variance
-a<- ggplot(df, aes(x = component, y = explained_variance)) +
+a<- ggplot(df_tr, aes(x = component_tr, y = explained_variance_tr)) +
   geom_bar(stat = "identity", fill = "skyblue") +
   labs(title = "Explained Variance by Principal Component",
        x = "Principal Component",
@@ -612,48 +566,43 @@ a<- ggplot(df, aes(x = component, y = explained_variance)) +
   theme_minimal()
 
 
-b <- ggplot(df, aes(x = component, y = cumulative_variance)) +
+b <- ggplot(df_tr, aes(x = component_tr, y = cumulative_variance_tr)) +
   geom_line(color = "blue") +
   geom_point(color = "blue") +
   labs(title = "Cumulative Variance by Principal Component",
        x = "Principal Component",
        y = "Cumulative Variance") +
   theme_minimal()
+rm(df_tr)
 
-rm(df)
-
-
-p_load(gridExtra)
-
+#Plot
 grid.arrange(a, b, ncol = 2)
 
+zdescriptions_tr <- as.data.frame(predict(pcdescriptions_tr)) %>%
+  mutate(property_id= train$property_id)
+
+zdescriptions_te <- as.data.frame(predict(pcdescriptions_te)) %>%
+  mutate(property_id= test$property_id)
 
 
-############################################################
-################ Precio por mts^2 #########################
-#Train
-#train <- train %>%
-#  mutate(precio_mt2 = round(price / area, 0))
-#low <- quantile(train$precio_mt2, 0.05,na.rm=T)
-#up <- quantile(train$precio_mt2, 0.97,na.rm=T)
+#Creamos las bases finales con ambos elementos
+train_full<-  train %>% 
+  full_join(description_m_tr, join_by(property_id)) %>%
+  full_join(zdescriptions_tr, join_by(property_id))
 
-#Test
-#test <- test %>%
-#  mutate(precio_mt2 = round(price / area, 0))
-#low <- quantile(test$precio_mt2, 0.05,na.rm=T)
-#up <- quantile(test$precio_mt2, 0.97,na.rm=T)
+test_full<-  test %>% 
+  full_join(description_m_te, join_by(property_id)) %>%
+  full_join(zdescriptions_te, join_by(property_id))
 
-#Visualización del precio por m^2 
-#wdb <- st_drop_geometry(train)
-#ggplot(wdb, aes(x = precio_mt2)) +
-#  geom_histogram()+
-#  theme_classic()
 
+##########################Separamos las Test y Train###################
+test <- train_full[train_full$es_test == 1, ]
+train <- train_full[train_full$es_test == 0, ]
 
 
 ############################################################
 #Algunas Distribuciones 
-plot_ban <- ggplot(test, aes(x = bathrooms)) +
+plot_ban <- ggplot(train, aes(x = bathrooms)) +
   geom_histogram(bins = 50, fill = "darkblue", alpha = 0.4) +
   labs(x = "Baños", y = "Cantidad",
        title = "Distribución de la Cantidad de Baños") +
@@ -681,11 +630,12 @@ plot_are <- ggplot(train, aes(x = area)) +
   theme_bw()
 ggplotly(plot_are)
 
+
 # Selección de Variables de interés y Est. descriptivas
-train<- train %>%
+train_estadisticas<- train %>%
   select(property_id,`price`,`month`,`year`,`rooms`,`bedrooms`,bathrooms, ESTRATO,area,description,latitud,longitud,distancia_sm,distancia_cc,barrio,codigo_upz,codigo_localidad,description,property_type )
 
-test<- test %>%
+test_estadisticas<- test %>%
   select(property_id,`price`,`month`,`year`,`rooms`,`bedrooms`,bathrooms, ESTRATO,area,description,latitud,longitud,distancia_sm,distancia_cc,barrio,codigo_upz,codigo_localidad,description,property_type )
 
 skim <- skim(train)
@@ -695,26 +645,25 @@ skim <- skim %>%
   kable_classic_2(full_width = F)
 
 # Visulaización de Missings
-nas_train<- vis_dat(as.data.frame(train))
-nas_test <- vis_dat(as.data.frame(test))
+#nas_train<- vis_dat(as.data.frame(train_estadisticas))
+#nas_test <- vis_dat(as.data.frame(test_estadisticas))
 
 #matriz de corrrelación
-wdb <- as.data.frame(train)
-wdb<- wdb %>%
-  select(`price`,`month`,`year`,`rooms`,`bedrooms`,bathrooms, ESTRATO,area)
-wdb <- na.omit(wdb)
-matriz_correlacion <- cor(wdb)
-matriz_correlacion <- matriz_correlacion %>%
-  kbl() %>%
-  kable_classic_2(full_width = F)
+#wdb <- as.data.frame(train)
+#wdb<- wdb %>%
+#  select(`price`,`month`,`year`,`rooms`,`bedrooms`,bathrooms, ESTRATO,area)
+#wdb <- na.omit(wdb)
+#matriz_correlacion <- cor(wdb)
+#matriz_correlacion <- matriz_correlacion %>%
+#  kbl() %>%
+#  kable_classic_2(full_width = F)
 
 
 #Exportar Base 
+save.image("BaseFinal.RData")
 
 train<- as.data.frame(st_drop_geometry(train))
 test<- as.data.frame(st_drop_geometry(test))
+#Completo
 write.csv(train,"Data/trainfiltrado.csv", row.names = FALSE)
 write.csv(test,"Data/testfiltrado.csv", row.names = FALSE)
-
-
-

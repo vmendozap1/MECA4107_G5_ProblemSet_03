@@ -25,24 +25,28 @@ train <- read.csv("trainfiltrado.csv")
 test <- read.csv("testfiltrado.csv")
 template <- read.csv("submission_template.csv")
 
-#train <- na.omit(train)#
+train <- train %>% mutate(barrio1 = factor(train$barrio))
+test <- test %>% mutate(barrio1 = factor(test$barrio))
+
+
 
 #Red Neuronal con Keras ##
 y <- log(train$price)
-x <- as.matrix(train %>%  month, year, rooms, bedrooms, bathrooms, ESTRATO, area, precio_mt2)
+x <- as.matrix(train %>%   select(month, year, rooms, bedrooms, bathrooms, ESTRATO, area, latitud, longitud, 
+                                  distancia_sm, distancia_cc, codigo_upz, codigo_localidad))
 x <- scale(x)
 
-##
+##Entrenar el modelo##
 
 nn_1 <- keras_model_sequential() %>%
-  layer_dense(units = 10, avtivation = "relu",
+  layer_dense(units = 28, activation = "relu",
               input_shape = ncol(x)) %>%
   layer_dense(units = 1)
 
 nn_1 %>% compile(loss = "mse",
                  optimizer = 'adam',
                  metrics = list("mean_absolute_error")
-)
+                 )
 
 set.seed(889845)
 history <- nn_1 %>% fit(
@@ -56,22 +60,17 @@ plot(history)
 
 nn_1 %>% evaluate(x,y)
 
-x_test <- test %>% select(month, year, rooms, bedrooms, bathrooms, ESTRATO, area, precio_mt2)
+# Ensure the input data dictionary has the correct key
+x_test <-  x_test %>% rename(columns={"month": "dense_1_input"})
 
+# Predict using the updated input data
 y_pred <- nn_1 %>% predict(x_test)
-
-
 
 #Envío para Kagglee
 
 predictSample <- test   %>% 
-  mutate(price = predict(cv_RForest, newdata = test)    ## predicted class labels
+  mutate(price = predict(nn_1, newdata = test)    ## predicted class labels
   )  %>% select(property_id,price)
-
-predictSample<- predictSample %>% 
-  left_join(test_hogares) %>% 
-  select(property_id,Ingpcug,Lp)
-
 
 write.csv(predictSample,"neunoral_network_1.csv", row.names = FALSE)
 
@@ -79,7 +78,8 @@ write.csv(predictSample,"neunoral_network_1.csv", row.names = FALSE)
 ##Red Neuronal con NNET ##
 
 y <- log(train$price)
-x <- as.matrix(train %>%  select(month, year, rooms, bedrooms, bathrooms, ESTRATO, area, precio_mt2))
+x <- as.matrix(train %>%  select(month, year, rooms, bedrooms, bathrooms, ESTRATO, area, latitud, longitud, 
+                                 distancia_sm, distancia_cc, codigo_upz, codigo_localidad))
 x <- scale(x)
 
 nn_2 <- nnet(y ~ x,
@@ -87,6 +87,13 @@ nn_2 <- nnet(y ~ x,
              size = 60,
              lineout = TRUE)
 
-y_pred_2 <- predict(nn_2, newdata = test)
+summary(nn_2)
 
+#Envío para Kagglee
+
+predictSample <- test   %>% 
+  mutate(price = predict(nn_2, newdata = test)    ## predicted class labels
+  )  %>% select(property_id,price)
+
+write.csv(predictSample,"neunoral_network_1.csv", row.names = FALSE)
 
